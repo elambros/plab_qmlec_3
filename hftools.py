@@ -4,6 +4,9 @@ import numpy as np
 from numpy import *
 import scipy
 from scipy.special import erf
+import matplotlib.pyplot as plt
+
+
 
 def xyz_reader(xyz):
     # Reads an xyz file (https://en.wikipedia.org/wiki/XYZ_file_format) and returns the number of atoms,
@@ -106,7 +109,8 @@ def calculate_integrals(zeta_dict, max_quantum_number, D, alpha, charge_dict, N_
     T = np.zeros((B,B))
     V = np.zeros((B,B))
     multi_electron_tensor = np.zeros((B,B,B,B))
-    
+   
+    gcfl = []
     
     # Iterate through atoms
     for idx_a, val_a in enumerate(atoms):
@@ -124,7 +128,7 @@ def calculate_integrals(zeta_dict, max_quantum_number, D, alpha, charge_dict, N_
             d_vec_m = D[m]
             zeta = zeta_dict[val_a][m]
             alpha_vec_m = alpha[m]*zeta**2
-            
+            gcfl.append({val_a:[alpha_vec_m,d_vec_m]})
             # Iterate over the contraction coefficients
             for p in range(STOnG):
                 
@@ -182,7 +186,7 @@ def calculate_integrals(zeta_dict, max_quantum_number, D, alpha, charge_dict, N_
                                                           (alpha_vec_l[s],Rd))
                                                     )
     
-    return S,T,V,multi_electron_tensor
+    return S,T,V,multi_electron_tensor,gcfl
 
 
 def orthoganalize_basis(S):
@@ -218,4 +222,90 @@ def get_coeffs_and_eigenvalues(Fock, X):
     C = dot(X,Cprime) 
 
     return C, evalFockprime
+
+def g1(alpha,r,Ra):
+    return np.exp(-alpha*np.linalg.norm(r-Ra)**2)
+
+def CGF(a,d,r,Ra):
+    #print(g1(a[0],r,Ra))
+    return d[0]*g1(a[0],r,Ra) + d[1]*g1(a[1],r,Ra) + d[2]*g1(a[2],r,Ra)
+
+def dens(a1,a2,d,r,Ra,Rb,P):
+
+    return P[0,0]*CGF(a1,d,r,Ra)*CGF(a1,d,r,Ra)+ P[1,1]*CGF(a2,d,r,Rb)*CGF(a2,d,r,Rb)+2*P[0,1]*CGF(a1,d,r,Ra)*CGF(a2,d,r,Rb)
+
+def orb_antibond(a1,a2,d,r,Ra,Rb,C):
+
+    return -C[0,1]*CGF(a1,d,r,Ra)+ -C[1,1]*CGF(a2,d,r,Rb)
+
+def orb_bond(a1,a2,d,r,Ra,Rb,C):
+
+    return -C[0,0]*CGF(a1,d,r,Ra)+ -C[1,0]*CGF(a2,d,r,Rb)
+
+
+def plot_dens(a1,a2,dvec,Ra,Rb,P):
+
+    yq, xq = np.meshgrid(np.linspace(-3, 3, 100), np.linspace(-3, 3, 100))
+
+    #z = dens(a1,a2,dvec,np.array([x,y,0]),Ra,Rb,P)
+    #z = dens(a1,a2,dvec,np.array([x,0,y]),Ra,Rb,P)
+    zq = dens(a2,a1,dvec,np.array([0,xq,yq]),Ra,Rb,P)
+    # x and y are bounds, so z should be the value *inside* those bounds.
+    # Therefore, remove the last value from the z array.
+    zq = zq[:-1, :-1]
+
+    fig, ax = plt.subplots()
+
+    c = ax.pcolormesh(xq, yq, zq, cmap='RdBu', vmin=0, vmax=1.5)
+    ax.set_title('HeH+ density')
+    # set the limits of the plot to the limits of the data
+    ax.axis([xq.min(), xq.max(), yq.min(), yq.max()])
+    fig.colorbar(c, ax=ax)
+
+    plt.show()
+
+
+def plot_orb_bond(a1,a2,dvec,Ra,Rb,C):
+
+    yq, xq = np.meshgrid(np.linspace(-3, 3, 100), np.linspace(-3, 3, 100))
+
+    #z = dens(a1,a2,dvec,np.array([x,y,0]),Ra,Rb,P)
+    #z = dens(a1,a2,dvec,np.array([x,0,y]),Ra,Rb,P)
+    zq = orb_bond(a2,a1,dvec,np.array([0,xq,yq]),Ra,Rb,C)
+    # x and y are bounds, so z should be the value *inside* those bounds.
+    # Therefore, remove the last value from the z array.
+    zq = zq[:-1, :-1]
+
+    fig, ax = plt.subplots()
+
+    c = ax.pcolormesh(xq, yq, zq, cmap='RdBu', vmin=-1, vmax=1)
+    ax.set_title('HeH+ bonding orbital')
+    # set the limits of the plot to the limits of the data
+    ax.axis([xq.min(), xq.max(), yq.min(), yq.max()])
+    fig.colorbar(c, ax=ax)
+
+    plt.show()
+
+
+def plot_orb_antibond(a1,a2,dvec,Ra,Rb,C):
+
+    yq, xq = np.meshgrid(np.linspace(-3, 3, 100), np.linspace(-3, 3, 100))
+
+    #z = dens(a1,a2,dvec,np.array([x,y,0]),Ra,Rb,P)
+    #z = dens(a1,a2,dvec,np.array([x,0,y]),Ra,Rb,P)
+    zq = orb_antibond(a1,a2,dvec,np.array([0,xq,yq]),Ra,Rb,C)
+    # x and y are bounds, so z should be the value *inside* those bounds.
+    # Therefore, remove the last value from the z array.
+    zq = zq[:-1, :-1]
+
+    fig, ax = plt.subplots()
+
+    c = ax.pcolormesh(xq, yq, zq, cmap='RdBu', vmin=-1, vmax=1)
+    ax.set_title('HeH+ antibonding orbital')
+    # set the limits of the plot to the limits of the data
+    ax.axis([xq.min(), xq.max(), yq.min(), yq.max()])
+    fig.colorbar(c, ax=ax)
+
+    plt.show()
+
 
